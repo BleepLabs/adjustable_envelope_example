@@ -3,7 +3,7 @@
   no controls required in current config. Just uplaod to hear some nice popcorn
 
   Only uses about 2% processor on 4.0 but is over 100% on Teensy 3.2 due to lots of powf
-  More info at
+  More info at https://github.com/BleepLabs/adjustable_envelope_example
 
 */
 
@@ -75,8 +75,8 @@ void setup() {
   waveform2.begin(1.0, .20, WAVEFORM_SINE);
   waveform3.begin(1.0, .06, WAVEFORM_SINE);
 
-  mixer1.gain(0, .7); //sine wave
-  mixer1.gain(1, .3); //noise info filter
+  mixer1.gain(0, 1); //sine wave
+  mixer1.gain(1, 0); //noise info filter
 
   noise1.amplitude(1);
 
@@ -125,7 +125,7 @@ void loop() {
     decay_time = (analogRead(A1) / 1024.0) * 500.0;
     sustain_level = (analogRead(A2) / 1024.0);
     release_time = (analogRead(A3) / 1024.0) * 1000.0;
-    shape_adj = (analogRead(A8) / 1024.0);
+    shape_adj = (analogRead(A8) / 512.0)-1.0;
     envelope1.attack(attack_time);
     envelope1.decay(decay_time);
     envelope1.sustain(sustain_level);
