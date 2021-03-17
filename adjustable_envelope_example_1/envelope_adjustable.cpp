@@ -10,29 +10,7 @@
 #define STATE_RELEASE 6
 #define STATE_FORCED  7
 
-void AudioEffectEnvelopeAdjustable::noteOn(void)
-{
-  __disable_irq();
-  triggerMode = 0;
-  first_calc = 1;
-  if (state == STATE_IDLE || state == STATE_DELAY || release_forced_count == 0) {
-    mult_hires = 0;
-    count = delay_count;
-    if (count > 0) {
-      state = STATE_DELAY;
-      inc_hires = 0;
-    } else {
-      state = STATE_ATTACK;
-      count = attack_count;
-      inc_hires = 0x40000000 / (int32_t)count;
-    }
-  } else if (state != STATE_FORCED) {
-    state = STATE_FORCED;
-    count = release_forced_count;
-    inc_hires = (-mult_hires) / (int32_t)count;
-  }
-  __enable_irq();
-}
+
 
 void AudioEffectEnvelopeAdjustable::trigger(void)
 {
@@ -60,15 +38,42 @@ void AudioEffectEnvelopeAdjustable::trigger(void)
 }
 
 
+void AudioEffectEnvelopeAdjustable::noteOn(void)
+{
+  __disable_irq();
+  if (state == STATE_IDLE || state == STATE_DELAY || release_forced_count == 0) {
+    mult_hires = 0;
+    triggerMode = 0;
+
+    count = delay_count;
+    if (count > 0) {
+      state = STATE_DELAY;
+      inc_hires = 0;
+    } else {
+      state = STATE_ATTACK;
+      count = attack_count;
+      inc_hires = 0x40000000 / (int32_t)count;
+    }
+  } else if (state != STATE_FORCED) {
+    state = STATE_FORCED;
+    count = release_forced_count;
+    inc_hires = (-mult_hires) / (int32_t)count;
+  }
+  __enable_irq();
+}
+
 void AudioEffectEnvelopeAdjustable::noteOff(void)
 {
   __disable_irq();
   if (state != STATE_IDLE && state != STATE_FORCED) {
+    triggerMode = 0;
     state = STATE_RELEASE;
     count = release_count;
-    inc_hires = (-mult_hires) / (int32_t)count;
+    mult_hires = 0x40000000;
+    first_rel = 1;
+    inc_hires = (0 - 0x40000000) / (int32_t)count; //always do it the full range then put sus in later  }
+    __enable_irq();
   }
-  __enable_irq();
 }
 
 void AudioEffectEnvelopeAdjustable::update(void)
@@ -103,30 +108,19 @@ void AudioEffectEnvelopeAdjustable::update(void)
         } else {
           state = STATE_DECAY;
           count = decay_count;
-          sustain(recalc_level);
           inc_hires = (sustain_mult - 0x40000000) / (int32_t)count;
         }
         continue;
       } else if (state == STATE_HOLD) {
         state = STATE_DECAY;
         count = decay_count;
-        if (triggerMode == 0) {
-          sustain(recalc_level);
-          inc_hires = (sustain_mult - 0x40000000) / (int32_t)count;
-        }
-        if (triggerMode == 1) {
-          inc_hires = (0 - 0x40000000) / (int32_t)count;
-        }
+        //inc_hires = (sustain_mult - 0x40000000) / (int32_t)count;
+        inc_hires = (0 - 0x40000000) / (int32_t)count; //always do it the full range then put sus in later
+
         continue;
       } else if (state == STATE_DECAY) {
-        if (triggerMode == 0) {
-          sustain(recalc_level);
-          state = STATE_SUSTAIN;
-          count = 0xFFFF;
-          mult_hires = sustain_mult;
-          inc_hires = 0;
-        }
         if (triggerMode == 1) {
+          triggerMode = 0;
           state = STATE_IDLE;
           while (p < end) {
             *p++ = 0;
@@ -135,6 +129,12 @@ void AudioEffectEnvelopeAdjustable::update(void)
             *p++ = 0;
           }
           break;
+        }
+        else {
+          state = STATE_SUSTAIN;
+          count = 0xFFFF;
+          mult_hires = sustain_mult;
+          inc_hires = 0;
         }
       } else if (state == STATE_SUSTAIN) {
         count = 0xFFFF;
@@ -177,27 +177,48 @@ void AudioEffectEnvelopeAdjustable::update(void)
     sample78 = *p++;
     p -= 4;
 
-    if (state == STATE_ATTACK) { //it's just easier to do this here rather than in count==0
+
+    if (state == STATE_ATTACK) { 
       shape_sel = attack_shape;
+      start_curve = fscale(mult, shape_sel);
+      end_curve = fscale(mult + (inc * 7), shape_sel);
     }
-    if (state == STATE_DECAY) {
+
+    else if (state == STATE_DECAY) {
       shape_sel = decay_shape;
+      if (triggerMode == 0) {
+        start_curve = (fscale(mult, shape_sel) * (1.0 - sus_level)) + (65534.0 * sus_level);
+        end_curve = (fscale(mult + (inc * 7), shape_sel) * (1.0 - sus_level)) + (65534.0 * sus_level);
+      }
+      else {
+        start_curve = fscale(mult, shape_sel);
+        end_curve = fscale(mult + (inc * 7), shape_sel);
+      }
     }
-    if (state == STATE_RELEASE) {
+
+    else if (state == STATE_RELEASE) {
+      if (first_rel == 1) {
+        first_rel = 0;
+        atten_level = float(start_curve) / 65534.0;
+      }
       shape_sel = release_shape;
+      start_curve = fscale(mult, shape_sel) * atten_level;
+      end_curve = fscale(mult + (inc * 7), shape_sel) * atten_level;
+
     }
 
-    if (first_calc == 1) {
-      //you could only calculate one per update but it doesn't save much and you still need to calc both on the first go around
-      //start_curve = fscale(mult, shape_sel);
-      first_calc = 0;
-    }
     else {
-      //start_curve = end_curve;
+      //hold the last curve
+
     }
 
-    start_curve = fscale(mult, shape_sel);
-    end_curve = fscale(mult + (inc * 7), shape_sel);
+    print_tick++;
+    if (print_tick > 40 && 0) {
+      print_tick = 0;
+      Serial.print(end_curve);
+      Serial.print(" ");
+      Serial.println(start_curve);
+    }
 
     tmp1 = signed_multiply_32x16b(start_curve, sample12);
     lerpstep++;

@@ -1,8 +1,8 @@
 /*
-  adjustable envelope generator for teensy 4.x
+  Adjustable envelope generator for teensy 4.x
   no controls required in current config. Just uplaod to hear some nice popcorn
 
-  Only uses about 2% processor on 4.0 but is over 100% on Teensy 3.2 due to lots of powf
+  Only uses about 2% processor on 4.0 but on the 3.2 it's over 100% due to lots of powf
   More info at https://github.com/BleepLabs/adjustable_envelope_example
 
 */
@@ -85,8 +85,9 @@ void setup() {
   envelope1.sustain(.4);
   envelope1.release(750);
   envelope1.shape(-.9); //change shape of all stages. -1.0 very expoential, 1.0 very log
-  //envelope1.attackShape(-.9);
-  //envelope1.decayShape(.3); //decay and release. Release isn't seperate right now
+  //envelope1.attackShape(-.9); change each one
+  /envelope1.decayShape(.1);
+  //envelope1.releaseShape(-.3);
 
   filter1.frequency(0);
   filter1.octaveControl(8);
@@ -125,7 +126,7 @@ void loop() {
     decay_time = (analogRead(A1) / 1024.0) * 500.0;
     sustain_level = (analogRead(A2) / 1024.0);
     release_time = (analogRead(A3) / 1024.0) * 1000.0;
-    shape_adj = (analogRead(A8) / 512.0)-1.0;
+    shape_adj = (analogRead(A8) / 512.0) - 1.0;
     envelope1.attack(attack_time);
     envelope1.decay(decay_time);
     envelope1.sustain(sustain_level);
