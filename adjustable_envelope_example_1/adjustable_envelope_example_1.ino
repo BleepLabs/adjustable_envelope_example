@@ -84,9 +84,9 @@ void setup() {
   envelope1.decay(100);
   envelope1.sustain(.4);
   envelope1.release(750);
-  envelope1.shape(-.9); //change shape of all stages. -1.0 very expoential, 1.0 very log
+  envelope1.shape(-.5); //change shape of all stages. -1.0 very expoential, 1.0 very log
   //envelope1.attackShape(-.9); change each one
-  /envelope1.decayShape(.1);
+  //envelope1.decayShape(.1);
   //envelope1.releaseShape(-.3);
 
   filter1.frequency(0);
