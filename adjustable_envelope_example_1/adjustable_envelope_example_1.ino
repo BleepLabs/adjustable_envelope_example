@@ -108,10 +108,10 @@ void loop() {
   //enable to adjust shapes with pots
   if (current_time - prev_time[1] > 10 && 0) {
     prev_time[1] = current_time;
-    attack_time = (analogRead(A10) / 1024.0) * 5000.0;
+    attack_time = (analogRead(A10) / 1024.0) * 500.0;
     decay_time = (analogRead(A11) / 1024.0) * 2000.0;
     sustain_level = (analogRead(A12) / 1024.0);
-    release_time = (analogRead(A13) / 1024.0) * 5000.0;
+    release_time = (analogRead(A13) / 1024.0) * 500.0;
 
     envelope1.attack(attack_time);
     envelope1.decay(decay_time);
