@@ -152,7 +152,7 @@ void loop() {
     }
   }
 
-  //enable for slopes, just the attack and decay, triggered randomly with random attach and decay
+  //enable for popcorn
   if (1) {
     if (current_time - prev_time[3] > 150) {
       prev_time[3] = current_time;

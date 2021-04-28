@@ -1,3 +1,20 @@
+/*
+
+  The big issue is that you can't just take mult and use that to calculate a curve.
+  This works fine for attack where the entire range is used but decay and release
+  only happen for part of the range so only a second of the curve would be calculated.
+
+  Here, mult always goes across the whole range then decay and release are offset and attenuated
+  as needed. 
+  When a note on or trigger is received while the output is >0, the current curve output is
+  searched for in the attack LUT so mult can start there. 
+
+  TODO
+  Add CV out
+  Add gate in
+*/
+
+
 #include <Arduino.h>
 #include "envelope_adjustable.h"
 
@@ -8,8 +25,7 @@
 #define STATE_DECAY 4
 #define STATE_SUSTAIN 5
 #define STATE_RELEASE 6
-#define STATE_FORCED  7
-
+#define STATE_FORCED  7 //no longer used
 
 
 void AudioEffectEnvelopeAdjustable::trigger(void)
@@ -58,11 +74,14 @@ void AudioEffectEnvelopeAdjustable::noteOn(void)
     //well that's jsut for attack to decay? rel messes up too
     uint16_t match_mult, prev_match_mult, mtest, pmtest;
     //uint32_t cu = micros();
-    for (int i; i < 128; i++) {
+    //you could make it search fro mthe top when its higher than half 
+    //or have a higher resoultion but
+    // but it's fine
+    for (int i = 1; i < 128; i++) { 
       pmtest = mtest;
       mtest = lerpLUT(i << 9, attack_shape);
       if ( pmtest <= end_curve && mtest >= end_curve) {
-        match_mult = i << 9;
+        match_mult = (i - 1) << 9; //it could be (i-.5) but this is fast and I haven't heard any issues
         break;
       }
     }
