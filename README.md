@@ -1,4 +1,11 @@
 ### Envelope generator with adjustable shape and DC out for Teensy 4 audio library  
+
+Now useses a LUT for much less processor usage.   
+  
+  TODO:  
+  CV output  
+  Gate input  
+  
   
   ![](https://raw.githubusercontent.com/BleepLabs/adjustable_envelope_example/main/envelope-examples.jpg)   
     
@@ -10,10 +17,5 @@
      
   This example is self contained and requires no change to your existing audio library files.    
     
-This object has the same in and out as the standard envelope but adds a DC output that is jsut the envelope level. Right now something must be goign into the input for it to work, though.  
-  
-This works well on the teensy 4.x and only takes about 2% processor on the 4.0 but on the 3.2 it’s over 100% due to all the powf use. Each update of envelope has two calls to fscale and then interpolates between them for the other values in the 8 output batch.   
-If there's demand I'll mke a LUT version of it for the 3.x
-
 
 
