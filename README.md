@@ -5,6 +5,7 @@ Now useses a LUT for much less processor usage.
   TODO:  
   CV output  
   Gate input  
+  Store LUT in flash. PROGMEM is not working inside the .h for some reason...  
   
   
   ![](https://raw.githubusercontent.com/BleepLabs/adjustable_envelope_example/main/envelope-examples.jpg)   
