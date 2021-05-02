@@ -1,20 +1,3 @@
-/*
-
-  The big issue is that you can't just take mult and use that to calculate a curve.
-  This works fine for attack where the entire range is used but decay and release
-  only happen for part of the range so only a second of the curve would be calculated.
-
-  Here, mult always goes across the whole range then decay and release are offset and attenuated
-  as needed. 
-  When a note on or trigger is received while the output is >0, the current curve output is
-  searched for in the attack LUT so mult can start there. 
-
-  TODO
-  Add CV out
-  Add gate in
-*/
-
-
 #include <Arduino.h>
 #include "envelope_adjustable.h"
 
@@ -25,7 +8,8 @@
 #define STATE_DECAY 4
 #define STATE_SUSTAIN 5
 #define STATE_RELEASE 6
-#define STATE_FORCED  7 //no longer used
+#define STATE_FORCED  7
+
 
 
 void AudioEffectEnvelopeAdjustable::trigger(void)
@@ -68,25 +52,14 @@ void AudioEffectEnvelopeAdjustable::noteOn(void)
     triggerMode = 0;
     int32_t tc;
 
-    //this only works for the same attack and decay shapes meeting
-    //you need to gifure out where end curve will meet start curve without messign with time?
-    //well clip fixes that
-    //well that's jsut for attack to decay? rel messes up too
-    uint16_t match_mult, prev_match_mult, mtest, pmtest;
-    //uint32_t cu = micros();
-    //you could make it search fro mthe top when its higher than half 
-    //or have a higher resoultion but
-    // but it's fine
-    for (int i = 1; i < 128; i++) { 
-      pmtest = mtest;
-      mtest = lerpLUT(i << 9, attack_shape);
-      if ( pmtest <= end_curve && mtest >= end_curve) {
-        match_mult = (i - 1) << 9; //it could be (i-.5) but this is fast and I haven't heard any issues
-        break;
-      }
+    if (calc_mode == 0) { //works great for fscale mode
+      tc = fscale(end_curve, shape_sel * -1.0);
     }
-    //uint32_t du = micros() - cu; //takes 35 micros when its a fast retrig @ 127 which seems to work fine?
-    mult_hires = match_mult << 14;
+    if (calc_mode == 1) { //not so much here bc idk
+      float fixit = .85;  //so I added arbitrary attenuation
+      tc = lerpLUT(end_curve * fixit, shape_sel * -1.0);
+    }
+    mult_hires = tc << 14;
     state = STATE_ATTACK;
     count = attack_count;
     inc_hires = 0x40000000 / (int32_t)count;
@@ -143,7 +116,8 @@ void AudioEffectEnvelopeAdjustable::update(void)
       } else if (state == STATE_HOLD) {
         state = STATE_DECAY;
         count = decay_count;
-        inc_hires = (0 - 0x40000000) / (int32_t)count; //go though the whole range then put sus level in later
+        //        inc_hires = (sustain_mult - 0x40000000) / (int32_t)count;
+        inc_hires = (0 - 0x40000000) / (int32_t)count; //always do it the full range then put sus in later
 
         continue;
       } else if (state == STATE_DECAY) {
@@ -187,21 +161,45 @@ void AudioEffectEnvelopeAdjustable::update(void)
     inc = inc_hires >> 17;
 
     int32_t end_mult = mult + (inc * 7);
-    if (end_mult > 65534) {
-      end_mult = 65534;
+    if (end_mult > 65530) {
+      end_mult = 65530;
     }
     if (end_mult < 1) {
       end_mult = 0;
     }
 
+
     byte clip = 0;
-    if (mult > 65534) {
-      mult = 65534;
+
+    if (mult > 65535) {
+      //Serial.print(" ! ");
+      //Serial.println(mult);
+      mult = 65535;
       clip = 1;
     }
 
+    float lstep = .001;
+    float lgap = .0025;
+
+    if  (sus_level < input_sus_level - lgap) {
+      sus_level += lstep;
+    }
+    else if  (sus_level > input_sus_level + lgap) {
+      sus_level -= lstep;
+    }
+    else {
+      sus_level = input_sus_level;
+    }
+    sustain_mult = sus_level * 1073741824.0;
+
+    print_tick++;
+    if (print_tick > 50 && 0) {
+      print_tick = 0;
+      Serial.println(sus_level * 100.0);
+    }
+    
     if (state == STATE_ATTACK) {
-      if (clip == 1) {
+      if (clip == 1 ) {
         count = hold_count;
         if (count > 0) {
           state = STATE_HOLD;
@@ -220,7 +218,7 @@ void AudioEffectEnvelopeAdjustable::update(void)
       else {
         shape_sel = attack_shape;
 
-        if (calc_mode == 0) { //leftover from previous version. Still have it here for testing
+        if (calc_mode == 0) {
           start_curve = fscale(mult, shape_sel);
           end_curve = fscale(end_mult, shape_sel);
         }
@@ -252,9 +250,11 @@ void AudioEffectEnvelopeAdjustable::update(void)
         if (calc_mode == 1) {
           start_curve = lerpLUT(mult, shape_sel);
           end_curve = lerpLUT(end_mult, shape_sel);
-          retrig_mult = end_mult;
         }
       }
+    }
+    else if (state == STATE_SUSTAIN) {
+      start_curve = end_curve = sustain_mult >> 14;
     }
 
     else if (state == STATE_RELEASE) {
@@ -273,10 +273,8 @@ void AudioEffectEnvelopeAdjustable::update(void)
       }
     }
     else {
-      //maintain the last curve
+      //hold the last curve (?)
     }
-
-    prev_shape_sel = shape_sel;
 
     if (start_curve > 65535) {
       start_curve = 65535;
@@ -300,7 +298,7 @@ void AudioEffectEnvelopeAdjustable::update(void)
         lerpsteps[i] = mult;
       }
 
-      else if (state == STATE_SUSTAIN) {
+      else if (state == STATE_SUSTAIN) { //for some reason it acts funny in log modes
         lerpsteps[0] = start_curve;
         lerpsteps[7] = start_curve;
         lerpsteps[i] = start_curve;
@@ -311,16 +309,6 @@ void AudioEffectEnvelopeAdjustable::update(void)
         lerpsteps[i] = start_curve - (step_size * i);
       }
 
-    }
-
-    print_tick++;
-    if (print_tick > 25 && 0) {
-      print_tick = 0;
-      //Serial.print(start_curve);
-      //Serial.print(" ");
-      Serial.print(end_curve);
-      Serial.print(" ");
-      Serial.println(mult);
     }
 
     // process 8 samples, using only mult and inc (16 bit resolution)
