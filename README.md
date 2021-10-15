@@ -1,9 +1,10 @@
 ### Envelope generator with adjustable shape and DC out for Teensy 4 audio library  
 
-Now useses a LUT for much less processor usage.   
+Now uses a LUT for much less processor usage.     
+Envelope CV out on out 1.  
   
+    
   TODO:  
-  CV output  
   Gate input  
   Store LUT in flash. PROGMEM is not working inside the .h for some reason...  
   
