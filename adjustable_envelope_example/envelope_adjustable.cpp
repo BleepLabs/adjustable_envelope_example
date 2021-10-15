@@ -85,17 +85,20 @@ void AudioEffectEnvelopeAdjustable::noteOff(void)
 
 void AudioEffectEnvelopeAdjustable::update(void)
 {
-  audio_block_t *block;
-  uint32_t *p, *end;
+  audio_block_t *block, *env_block;;
+  uint32_t *p, *ep, *end;
   uint32_t sample12, sample34, sample56, sample78, tmp1, tmp2;
 
   block = receiveWritable();
   if (!block) return;
+  env_block = allocate();
   if (state == STATE_IDLE) {
     release(block);
+    release(env_block);
     return;
   }
   p = (uint32_t *)(block->data);
+  ep = (uint32_t *)(env_block->data);
   end = p + AUDIO_BLOCK_SAMPLES / 2;
 
   while (p < end) {
@@ -197,7 +200,7 @@ void AudioEffectEnvelopeAdjustable::update(void)
       print_tick = 0;
       Serial.println(sus_level * 100.0);
     }
-    
+
     if (state == STATE_ATTACK) {
       if (clip == 1 ) {
         count = hold_count;
@@ -311,6 +314,12 @@ void AudioEffectEnvelopeAdjustable::update(void)
 
     }
 
+    print_tick++;
+    if (print_tick > 200 && 0) {
+      print_tick = 0;
+      Serial.println(lerpsteps[3]);
+    }
+
     // process 8 samples, using only mult and inc (16 bit resolution)
     sample12 = *p++;
     sample34 = *p++;
@@ -336,13 +345,33 @@ void AudioEffectEnvelopeAdjustable::update(void)
     *p++ = sample56;
     *p++ = sample78;
 
+    tmp1 = signed_multiply_32x16b(lerpsteps[0], 32766);
+    tmp2 = signed_multiply_32x16t(lerpsteps[1], 32766);
+    sample12 = pack_16b_16b(tmp2, tmp1);
+    tmp1 = signed_multiply_32x16b(lerpsteps[2], 32766);
+    tmp2 = signed_multiply_32x16t(lerpsteps[3], 32766);
+    sample34 = pack_16b_16b(tmp2, tmp1);
+    tmp1 = signed_multiply_32x16b(lerpsteps[4], 32766);
+    tmp2 = signed_multiply_32x16t(lerpsteps[5], 32766);
+    sample56 = pack_16b_16b(tmp2, tmp1);
+    tmp1 = signed_multiply_32x16b(lerpsteps[6], 32766);
+    tmp2 = signed_multiply_32x16t(lerpsteps[7], 32766);
+    sample78 = pack_16b_16b(tmp2, tmp1);
+    *ep++ = sample12;
+    *ep++ = sample34;
+    *ep++ = sample56;
+    *ep++ = sample78;
+
     // adjust the long-term gain using 30 bit resolution (fix #102)
     // https://github.com/PaulStoffregen/Audio/issues/102
     mult_hires += inc_hires;
     count--;
   }
   transmit(block);
-  release(block);
+  release(block); if (env_block) {
+    transmit(env_block, 1);
+    release(env_block);
+  }
 }
 
 bool AudioEffectEnvelopeAdjustable::isActive()
