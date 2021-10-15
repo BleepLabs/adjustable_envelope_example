@@ -88,15 +88,19 @@ void AudioEffectEnvelopeAdjustable::update(void)
   audio_block_t *block, *env_block;;
   uint32_t *p, *ep, *end;
   uint32_t sample12, sample34, sample56, sample78, tmp1, tmp2;
-
+  //block = allocate();
   block = receiveWritable();
-  if (!block) return;
+  if (!block) {
+    block = allocate();
+  }
+
   env_block = allocate();
   if (state == STATE_IDLE) {
     release(block);
     release(env_block);
     return;
   }
+
   p = (uint32_t *)(block->data);
   ep = (uint32_t *)(env_block->data);
   end = p + AUDIO_BLOCK_SAMPLES / 2;
