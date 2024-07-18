@@ -16,17 +16,10 @@ void AudioEffectEnvelopeAdjustable::trigger(void)
 {
   __disable_irq();
   triggerMode = 1;
-  //first_calc = 1;
-  //mult_hires = 0;
-  count = delay_count;
-  if (count > 0) {
-    state = STATE_DELAY;
-    //inc_hires = 0;
-  } else {
-    state = STATE_ATTACK;
-    count = attack_count;
-    inc_hires = 0x40000000 / (int32_t)count;
-  }
+  state = STATE_ATTACK;
+  count = attack_count;
+  inc_hires = 0x40000000 / (int32_t)count;
+  
   __enable_irq();
 }
 
